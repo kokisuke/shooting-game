@@ -1,7 +1,13 @@
-
-
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
+
+// Adjust canvas to screen size
+function resizeCanvas() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight * 0.8; // Use 80% of height for game
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
 
 // Game state
 let score = 0;
@@ -38,40 +44,57 @@ let boss = null;
 // Stars
 const stars = [];
 
-// Keyboard state
+// Input state (keyboard and touch)
 const keys = {};
 
-function initStars() {
-    for (let i = 0; i < 100; i++) {
-        stars.push({
-            x: Math.random() * canvas.width,
-            y: Math.random() * canvas.height,
-            radius: Math.random() * 2,
-            speed: Math.random() * 0.5 + 0.2
-        });
-    }
-}
-
+// --- Event Listeners for Keyboard ---
 document.addEventListener('keydown', (e) => {
     if (gameOver) {
         if (e.code === 'Space') restartGame();
         return;
     }
     keys[e.code] = true;
-    if (e.code === 'Space') {
-        bullets.push({
-            x: player.x + player.width,
-            y: player.y + player.height / 2 - 2.5,
-            width: 15,
-            height: 5,
-            color: '#f0f',
-            shadowColor: '#f0f',
-            shadowBlur: 15
-        });
-    }
+    if (e.code === 'Space') fireBullet();
 });
-
 document.addEventListener('keyup', (e) => { keys[e.code] = false; });
+
+// --- Event Listeners for Touch Controls ---
+const controlMap = {
+    'btn-up': 'ArrowUp',
+    'btn-down': 'ArrowDown',
+    'btn-left': 'ArrowLeft',
+    'btn-right': 'ArrowRight',
+    'btn-fire': 'Space'
+};
+
+for (const btnId in controlMap) {
+    const btn = document.getElementById(btnId);
+    const key = controlMap[btnId];
+
+    btn.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        keys[key] = true;
+        if (key === 'Space') fireBullet();
+    }, { passive: false });
+
+    btn.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        keys[key] = false;
+    }, { passive: false });
+}
+
+function fireBullet() {
+    if (gameOver) return;
+    bullets.push({
+        x: player.x + player.width,
+        y: player.y + player.height / 2 - 2.5,
+        width: 15,
+        height: 5,
+        color: '#f0f',
+        shadowColor: '#f0f',
+        shadowBlur: 15
+    });
+}
 
 function restartGame() {
     score = 0;
@@ -99,11 +122,11 @@ function goToNextStage() {
 
 function spawnBoss() {
     isBossActive = true;
-    enemies.length = 0; // Clear normal enemies
+    enemies.length = 0;
     const bossHP = 100 + (stage - 1) * 50;
     const bossColor = enemyColors[(stage - 1) % enemyColors.length];
     const bossSpeed = 2 + (stage - 1) * 0.5;
-    const bossAttackCooldown = Math.max(20, 60 - (stage - 1) * 5); // Faster attacks, min 20 frames
+    const bossAttackCooldown = Math.max(20, 60 - (stage - 1) * 5);
 
     boss = {
         x: canvas.width - 150,
@@ -124,36 +147,16 @@ function spawnBoss() {
 
 function updateBoss() {
     if (!boss) return;
-
-    // Movement
     boss.x += boss.speedX;
     boss.y += boss.speedY;
-    if (boss.x <= canvas.width / 2 || boss.x + boss.width >= canvas.width) {
-        boss.speedX *= -1;
-    }
-    if (boss.y <= 0 || boss.y + boss.height >= canvas.height) {
-        boss.speedY *= -1;
-    }
-
-    // Attack
+    if (boss.x <= canvas.width / 2 || boss.x + boss.width >= canvas.width) boss.speedX *= -1;
+    if (boss.y <= 0 || boss.y + boss.height >= canvas.height) boss.speedY *= -1;
     boss.attackTimer--;
     if (boss.attackTimer <= 0) {
-        bossBullets.push({
-            x: boss.x,
-            y: boss.y + boss.height / 2,
-            width: 15,
-            height: 15,
-            color: '#ff8c00',
-            shadowColor: '#ff8c00',
-            shadowBlur: 15,
-            speed: -4
-        });
+        bossBullets.push({ x: boss.x, y: boss.y + boss.height / 2, width: 15, height: 15, color: '#ff8c00', shadowColor: '#ff8c00', shadowBlur: 15, speed: -4 });
         boss.attackTimer = boss.attackCooldown;
     }
-    // Collision with player
-    if (isColliding(player, boss)) {
-        gameOver = true;
-    }
+    if (isColliding(player, boss)) gameOver = true;
 }
 
 function drawBoss() {
@@ -163,8 +166,6 @@ function drawBoss() {
     ctx.shadowBlur = boss.shadowBlur;
     ctx.fillRect(boss.x, boss.y, boss.width, boss.height);
     ctx.shadowBlur = 0;
-
-    // HP Bar
     const hpBarWidth = 300;
     const hpBarHeight = 20;
     const hpBarX = (canvas.width - hpBarWidth) / 2;
@@ -182,12 +183,8 @@ function updateBossBullets() {
     for (let i = bossBullets.length - 1; i >= 0; i--) {
         const bullet = bossBullets[i];
         bullet.x += bullet.speed;
-        if (isColliding(player, bullet)) {
-            gameOver = true;
-        }
-        if (bullet.x < 0) {
-            bossBullets.splice(i, 1);
-        }
+        if (isColliding(player, bullet)) gameOver = true;
+        if (bullet.x < 0) bossBullets.splice(i, 1);
     }
 }
 
@@ -208,32 +205,23 @@ function updateBullets() {
         const bullet = bullets[i];
         if (!bullet) continue;
         bullet.x += bulletSpeed;
-
         if (isBossActive && boss && isColliding(bullet, boss)) {
             boss.hp -= 10;
             bullets.splice(i, 1);
-            if (boss.hp <= 0) {
-                goToNextStage();
-            }
+            if (boss.hp <= 0) goToNextStage();
             continue;
         }
-
         for (let j = enemies.length - 1; j >= 0; j--) {
             const enemy = enemies[j];
             if (isColliding(bullet, enemy)) {
                 enemies.splice(j, 1);
                 bullets.splice(i, 1);
                 score += 10;
-                if (!isBossActive && score >= scoreThreshold) {
-                    spawnBoss();
-                }
+                if (!isBossActive && score >= scoreThreshold) spawnBoss();
                 break;
             }
         }
-
-        if (bullet && bullet.x > canvas.width) {
-            bullets.splice(i, 1);
-        }
+        if (bullet && bullet.x > canvas.width) bullets.splice(i, 1);
     }
 }
 
@@ -242,16 +230,7 @@ function spawnEnemy() {
     const size = Math.random() * 40 + 20;
     const y = Math.random() * (canvas.height - size);
     const color = enemyColors[(stage - 1) % enemyColors.length];
-    enemies.push({
-        x: canvas.width,
-        y: y,
-        width: size,
-        height: size,
-        color: color,
-        speed: (Math.random() * 3 + 1.5) * enemySpeedMultiplier,
-        shadowColor: color,
-        shadowBlur: 20
-    });
+    enemies.push({ x: canvas.width, y: y, width: size, height: size, color: color, speed: (Math.random() * 3 + 1.5) * enemySpeedMultiplier, shadowColor: color, shadowBlur: 20 });
 }
 
 function gameLoop() {
@@ -259,13 +238,11 @@ function gameLoop() {
         drawGameOver();
         return;
     }
-
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     updateStars();
     drawStars();
     drawPlayer();
     updatePlayer();
-
     if (isBossActive) {
         drawBoss();
         updateBoss();
@@ -275,16 +252,14 @@ function gameLoop() {
         drawEnemies();
         updateEnemies();
     }
-
     drawBullets();
     updateBullets();
     drawHUD();
-
     requestAnimationFrame(gameLoop);
 }
 
-// --- Simplified functions (unchanged) ---
-function initStars(){for(let i=0;i<100;i++){stars.push({x:Math.random()*canvas.width,y:Math.random()*canvas.height,radius:Math.random()*2,speed:Math.random()*0.5+0.2})}}function drawStars(){ctx.fillStyle='#fff';for(const t of stars){ctx.beginPath();ctx.arc(t.x,t.y,t.radius,0,Math.PI*2);ctx.fill()}}function updateStars(){for(const t of stars){t.x-=t.speed;if(t.x<0){t.x=canvas.width;t.y=Math.random()*canvas.height}}}function drawPlayer(){ctx.fillStyle=player.color;ctx.shadowColor=player.shadowColor;ctx.shadowBlur=player.shadowBlur;ctx.fillRect(player.x,player.y,player.width,player.height);ctx.shadowBlur=0}function updatePlayer(){if(keys.ArrowUp&&player.y>0)player.y-=player.speed;if(keys.ArrowDown&&player.y<canvas.height-player.height)player.y+=player.speed;if(keys.ArrowLeft&&player.x>0)player.x-=player.speed;if(keys.ArrowRight&&player.x<canvas.width-player.width)player.x+=player.speed}function drawBullets(){for(const t of bullets){ctx.fillStyle=t.color;ctx.shadowColor=t.shadowColor;ctx.shadowBlur=t.shadowBlur;ctx.fillRect(t.x,t.y,t.width,t.height);ctx.shadowBlur=0}}function drawEnemies(){for(const t of enemies){ctx.fillStyle=t.color;ctx.shadowColor=t.shadowColor;ctx.shadowBlur=t.shadowBlur;ctx.fillRect(t.x,t.y,t.width,t.height);ctx.shadowBlur=0}}function updateEnemies(){for(let i=enemies.length-1;i>=0;i--){const t=enemies[i];t.x-=t.speed;if(isColliding(player,t))gameOver=true;if(t.x+t.width<0)enemies.splice(i,1)}}function isColliding(t,o){return t.x<o.x+o.width&&t.x+t.width>o.x&&t.y<o.y+o.height&&t.y+t.height>o.y}function drawHUD(){ctx.fillStyle='#fff';ctx.font="24px 'Courier New', Courier, monospace";ctx.shadowColor='#fff';ctx.shadowBlur=10;ctx.textAlign='left';ctx.fillText(`SCORE: ${score}`,20,40);ctx.textAlign='right';ctx.fillText(`STAGE: ${stage}`,canvas.width-20,40);ctx.shadowBlur=0;ctx.textAlign='left'}function drawGameOver(){ctx.fillStyle='rgba(0,0,0,0.7)';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.fillStyle='#f00';ctx.font="bold 60px 'Courier New', Courier, monospace";ctx.textAlign='center';ctx.shadowColor='#f00';ctx.shadowBlur=20;ctx.fillText('GAME OVER',canvas.width/2,canvas.height/2);ctx.shadowBlur=0;ctx.fillStyle='#fff';ctx.font="20px 'Courier New', Courier, monospace";ctx.fillText('Press SPACE to restart',canvas.width/2,canvas.height/2+50)}
+// --- Simplified/Unchanged Functions ---
+function initStars(){for(let i=0;i<100;i++)stars.push({x:Math.random()*canvas.width,y:Math.random()*canvas.height,radius:Math.random()*2,speed:Math.random()*0.5+0.2})}function drawStars(){ctx.fillStyle='#fff';for(const t of stars){ctx.beginPath();ctx.arc(t.x,t.y,t.radius,0,Math.PI*2);ctx.fill()}}function updateStars(){for(const t of stars){t.x-=t.speed;if(t.x<0){t.x=canvas.width;t.y=Math.random()*canvas.height}}}function drawPlayer(){ctx.fillStyle=player.color;ctx.shadowColor=player.shadowColor;ctx.shadowBlur=player.shadowBlur;ctx.fillRect(player.x,player.y,player.width,player.height);ctx.shadowBlur=0}function updatePlayer(){if(keys.ArrowUp&&player.y>0)player.y-=player.speed;if(keys.ArrowDown&&player.y<canvas.height-player.height)player.y+=player.speed;if(keys.ArrowLeft&&player.x>0)player.x-=player.speed;if(keys.ArrowRight&&player.x<canvas.width-player.width)player.x+=player.speed}function drawBullets(){for(const t of bullets){ctx.fillStyle=t.color;ctx.shadowColor=t.shadowColor;ctx.shadowBlur=t.shadowBlur;ctx.fillRect(t.x,t.y,t.width,t.height);ctx.shadowBlur=0}}function drawEnemies(){for(const t of enemies){ctx.fillStyle=t.color;ctx.shadowColor=t.shadowColor;ctx.shadowBlur=t.shadowBlur;ctx.fillRect(t.x,t.y,t.width,t.height);ctx.shadowBlur=0}}function updateEnemies(){for(let i=enemies.length-1;i>=0;i--){const t=enemies[i];t.x-=t.speed;if(isColliding(player,t))gameOver=true;if(t.x+t.width<0)enemies.splice(i,1)}}function isColliding(t,o){return t.x<o.x+o.width&&t.x+t.width>o.x&&t.y<o.y+o.height&&t.y+t.height>o.y}function drawHUD(){ctx.fillStyle='#fff';ctx.font="24px 'Courier New', Courier, monospace";ctx.shadowColor='#fff';ctx.shadowBlur=10;ctx.textAlign='left';ctx.fillText(`SCORE: ${score}`,20,40);ctx.textAlign='right';ctx.fillText(`STAGE: ${stage}`,canvas.width-20,40);ctx.shadowBlur=0;ctx.textAlign='left'}function drawGameOver(){ctx.fillStyle='rgba(0,0,0,0.7)';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.fillStyle='#f00';ctx.font="bold 60px 'Courier New', Courier, monospace";ctx.textAlign='center';ctx.shadowColor='#f00';ctx.shadowBlur=20;ctx.fillText('GAME OVER',canvas.width/2,canvas.height/2);ctx.shadowBlur=0;ctx.fillStyle='#fff';ctx.font="20px 'Courier New', Courier, monospace";ctx.fillText('Press SPACE to restart',canvas.width/2,canvas.height/2+50)}
 
 // --- Initial calls ---
 initStars();
