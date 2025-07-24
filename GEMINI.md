@@ -1,4 +1,4 @@
-## Project: シューティングゲーム (Shooting Game)
+## Project: Star Shooting
 
 This project is a web-based shooting game created with HTML, CSS, and JavaScript, designed to be fully responsive and playable on both desktop and mobile devices.
 
