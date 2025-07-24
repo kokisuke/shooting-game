@@ -1,123 +1,128 @@
+
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
-// Adjust canvas to screen size
+let isVertical = false;
+
 function resizeCanvas() {
+    isVertical = window.innerHeight > window.innerWidth;
     canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight * 0.8; // Use 80% of height for game
+    canvas.height = window.innerHeight * (isVertical ? 0.85 : 0.8);
 }
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
-// Game state
-let score = 0;
-let gameOver = false;
-let stage = 1;
-let scoreThreshold = 100;
-let enemySpeedMultiplier = 1.0;
-let isBossActive = false;
+// --- Game state ---
+let score = 0, gameOver = false, stage = 1, scoreThreshold = 100, enemySpeedMultiplier = 1.0, isBossActive = false;
 
-// Player
-const player = {
-    x: 50,
-    y: canvas.height / 2 - 25,
-    width: 50,
-    height: 50,
-    color: '#0ff',
-    speed: 5,
-    shadowColor: '#0ff',
-    shadowBlur: 20
-};
-
-// Bullets
-const bullets = [];
-const bulletSpeed = 10;
-const bossBullets = [];
-
-// Enemies
-const enemies = [];
-const enemyColors = ['#0f0', '#f0f', '#ff0', '#f80', '#f00'];
-
-// Boss
+// --- Game Objects ---
+const player = { x: 50, y: 0, width: 50, height: 50, color: '#0ff', speed: 8, shadowColor: '#0ff', shadowBlur: 20 };
+const bullets = [], bossBullets = [];
+const enemies = [], enemyColors = ['#0f0', '#f0f', '#ff0', '#f80', '#f00'];
 let boss = null;
-
-// Stars
 const stars = [];
-
-// Input state (keyboard and touch)
 const keys = {};
 
-// --- Event Listeners for Keyboard ---
-document.addEventListener('keydown', (e) => {
-    if (gameOver) {
-        if (e.code === 'Space') restartGame();
-        return;
-    }
+// --- Event Listeners ---
+document.addEventListener('keydown', e => {
+    if (gameOver) { if (e.code === 'Space') restartGame(); return; }
     keys[e.code] = true;
-    if (e.code === 'Space') fireBullet();
 });
-document.addEventListener('keyup', (e) => { keys[e.code] = false; });
+document.addEventListener('keyup', e => { keys[e.code] = false; });
 
-// --- Event Listeners for Touch Controls ---
-const controlMap = {
-    'btn-up': 'ArrowUp',
-    'btn-down': 'ArrowDown',
-    'btn-left': 'ArrowLeft',
-    'btn-right': 'ArrowRight',
-    'btn-fire': 'Space'
-};
-
+const controlMap = { 'btn-up': 'ArrowUp', 'btn-down': 'ArrowDown', 'btn-left': 'ArrowLeft', 'btn-right': 'ArrowRight', 'btn-fire': 'Space' };
 for (const btnId in controlMap) {
     const btn = document.getElementById(btnId);
     const key = controlMap[btnId];
-
-    btn.addEventListener('touchstart', (e) => {
+    const eventHandler = (isPressed) => (e) => {
         e.preventDefault();
-        keys[key] = true;
-        if (key === 'Space') fireBullet();
-    }, { passive: false });
+        keys[key] = isPressed;
+    };
+    btn.addEventListener('touchstart', eventHandler(true), { passive: false });
+    btn.addEventListener('touchend', eventHandler(false), { passive: false });
+    btn.addEventListener('mousedown', eventHandler(true), { passive: false });
+    btn.addEventListener('mouseup', eventHandler(false), { passive: false });
+}
 
-    btn.addEventListener('touchend', (e) => {
-        e.preventDefault();
-        keys[key] = false;
-    }, { passive: false });
+// --- Game Logic ---
+function restartGame() {
+    score = 0; gameOver = false; stage = 1; scoreThreshold = 100; enemySpeedMultiplier = 1.0; isBossActive = false;
+    boss = null;
+    [enemies, bullets, bossBullets].forEach(arr => arr.length = 0);
+    resetPlayerPosition();
+    gameLoop();
+}
+
+function resetPlayerPosition() {
+    player.y = isVertical ? canvas.height - player.height - 20 : canvas.height / 2 - player.height / 2;
+    player.x = isVertical ? canvas.width / 2 - player.width / 2 : 50;
 }
 
 function fireBullet() {
     if (gameOver) return;
     bullets.push({
-        x: player.x + player.width,
-        y: player.y + player.height / 2 - 2.5,
-        width: 15,
-        height: 5,
-        color: '#f0f',
-        shadowColor: '#f0f',
-        shadowBlur: 15
+        x: player.x + player.width / 2 - (isVertical ? 2.5 : -player.width / 2),
+        y: player.y - (isVertical ? 10 : -player.height / 2),
+        width: isVertical ? 5 : 15,
+        height: isVertical ? 15 : 5,
+        color: '#f0f', shadowColor: '#f0f', shadowBlur: 15
     });
 }
 
-function restartGame() {
-    score = 0;
-    gameOver = false;
-    stage = 1;
-    scoreThreshold = 100;
-    enemySpeedMultiplier = 1.0;
-    isBossActive = false;
-    boss = null;
-    enemies.length = 0;
-    bullets.length = 0;
-    bossBullets.length = 0;
-    player.x = 50;
-    player.y = canvas.height / 2 - 25;
-    gameLoop();
+function updatePlayer() {
+    if (isVertical) {
+        if (keys.ArrowLeft && player.x > 0) player.x -= player.speed;
+        if (keys.ArrowRight && player.x < canvas.width - player.width) player.x += player.speed;
+    } else {
+        if (keys.ArrowUp && player.y > 0) player.y -= player.speed;
+        if (keys.ArrowDown && player.y < canvas.height - player.height) player.y += player.speed;
+        if (keys.ArrowLeft && player.x > 0) player.x -= player.speed;
+        if (keys.ArrowRight && player.x < canvas.width - player.width) player.x += player.speed;
+    }
 }
 
-function goToNextStage() {
-    stage++;
-    scoreThreshold += 100;
-    enemySpeedMultiplier += 0.4;
-    isBossActive = false;
-    boss = null;
+function spawnEnemy() {
+    if (gameOver || isBossActive) return;
+    const size = Math.random() * 40 + 20;
+    const color = enemyColors[(stage - 1) % enemyColors.length];
+    enemies.push({
+        x: isVertical ? Math.random() * (canvas.width - size) : canvas.width,
+        y: isVertical ? -size : Math.random() * (canvas.height - size),
+        width: size, height: size, color: color, shadowColor: color, shadowBlur: 20,
+        speed: (Math.random() * (isVertical ? 2.5 : 3) + 1.5) * enemySpeedMultiplier
+    });
+}
+
+function updateEnemies() {
+    for (let i = enemies.length - 1; i >= 0; i--) {
+        const e = enemies[i];
+        if (isVertical) e.y += e.speed; else e.x -= e.speed;
+        if (isColliding(player, e)) gameOver = true;
+        if ((isVertical && e.y > canvas.height) || (!isVertical && e.x + e.width < 0)) enemies.splice(i, 1);
+    }
+}
+
+function updateBullets() {
+    for (let i = bullets.length - 1; i >= 0; i--) {
+        const b = bullets[i];
+        if (isVertical) b.y -= 10; else b.x += 10;
+        if (isBossActive && boss && isColliding(b, boss)) {
+            boss.hp -= 10;
+            bullets.splice(i, 1);
+            if (boss.hp <= 0) goToNextStage();
+            continue;
+        }
+        for (let j = enemies.length - 1; j >= 0; j--) {
+            if (isColliding(b, enemies[j])) {
+                enemies.splice(j, 1);
+                bullets.splice(i, 1);
+                score += 10;
+                if (!isBossActive && score >= scoreThreshold) spawnBoss();
+                break;
+            }
+        }
+        if (b.y < 0 || b.x > canvas.width) bullets.splice(i, 1);
+    }
 }
 
 function spawnBoss() {
@@ -127,141 +132,73 @@ function spawnBoss() {
     const bossColor = enemyColors[(stage - 1) % enemyColors.length];
     const bossSpeed = 2 + (stage - 1) * 0.5;
     const bossAttackCooldown = Math.max(20, 60 - (stage - 1) * 5);
-
     boss = {
-        x: canvas.width - 150,
-        y: canvas.height / 2 - 50,
-        width: 100,
-        height: 100,
-        color: bossColor,
-        shadowColor: bossColor,
-        shadowBlur: 25,
-        speedX: bossSpeed,
-        speedY: bossSpeed,
-        hp: bossHP,
-        maxHp: bossHP,
-        attackCooldown: bossAttackCooldown,
-        attackTimer: 0
+        width: 100, height: 100, color: bossColor, shadowColor: bossColor, shadowBlur: 25,
+        hp: bossHP, maxHp: bossHP, attackCooldown: bossAttackCooldown, attackTimer: 0,
+        x: isVertical ? canvas.width / 2 - 50 : canvas.width - 150,
+        y: isVertical ? 50 : canvas.height / 2 - 50,
+        speedX: isVertical ? bossSpeed : -bossSpeed,
+        speedY: bossSpeed
     };
 }
 
 function updateBoss() {
     if (!boss) return;
-    boss.x += boss.speedX;
-    boss.y += boss.speedY;
-    if (boss.x <= canvas.width / 2 || boss.x + boss.width >= canvas.width) boss.speedX *= -1;
-    if (boss.y <= 0 || boss.y + boss.height >= canvas.height) boss.speedY *= -1;
+    boss.x += boss.speedX; boss.y += boss.speedY;
+    if ((isVertical && (boss.x <= 0 || boss.x + boss.width >= canvas.width)) || 
+        (!isVertical && (boss.x <= canvas.width / 2 || boss.x + boss.width >= canvas.width))) {
+        boss.speedX *= -1;
+    }
+    if ((isVertical && (boss.y <= 0 || boss.y + boss.height >= canvas.height / 2)) ||
+        (!isVertical && (boss.y <= 0 || boss.y + boss.height >= canvas.height))) {
+        boss.speedY *= -1;
+    }
     boss.attackTimer--;
     if (boss.attackTimer <= 0) {
-        bossBullets.push({ x: boss.x, y: boss.y + boss.height / 2, width: 15, height: 15, color: '#ff8c00', shadowColor: '#ff8c00', shadowBlur: 15, speed: -4 });
+        bossBullets.push({ 
+            x: boss.x + boss.width / 2, y: boss.y + boss.height, 
+            width: 15, height: 15, color: '#ff8c00', shadowColor: '#ff8c00', shadowBlur: 15, 
+            speed: isVertical ? 4 : -4 
+        });
         boss.attackTimer = boss.attackCooldown;
     }
     if (isColliding(player, boss)) gameOver = true;
 }
 
-function drawBoss() {
-    if (!boss) return;
-    ctx.fillStyle = boss.color;
-    ctx.shadowColor = boss.shadowColor;
-    ctx.shadowBlur = boss.shadowBlur;
-    ctx.fillRect(boss.x, boss.y, boss.width, boss.height);
-    ctx.shadowBlur = 0;
-    const hpBarWidth = 300;
-    const hpBarHeight = 20;
-    const hpBarX = (canvas.width - hpBarWidth) / 2;
-    const hpBarY = 10;
-    ctx.fillStyle = '#555';
-    ctx.fillRect(hpBarX, hpBarY, hpBarWidth, hpBarHeight);
-    const currentHpWidth = (boss.hp / boss.maxHp) * hpBarWidth;
-    ctx.fillStyle = boss.color;
-    ctx.fillRect(hpBarX, hpBarY, currentHpWidth, hpBarHeight);
-    ctx.strokeStyle = '#fff';
-    ctx.strokeRect(hpBarX, hpBarY, hpBarWidth, hpBarHeight);
-}
-
 function updateBossBullets() {
     for (let i = bossBullets.length - 1; i >= 0; i--) {
-        const bullet = bossBullets[i];
-        bullet.x += bullet.speed;
-        if (isColliding(player, bullet)) gameOver = true;
-        if (bullet.x < 0) bossBullets.splice(i, 1);
+        const b = bossBullets[i];
+        if (isVertical) b.y += b.speed; else b.x += b.speed;
+        if (isColliding(player, b)) gameOver = true;
+        if (b.y > canvas.height || b.x < 0) bossBullets.splice(i, 1);
     }
 }
 
-function drawBossBullets() {
-    for (const bullet of bossBullets) {
-        ctx.fillStyle = bullet.color;
-        ctx.shadowColor = bullet.shadowColor;
-        ctx.shadowBlur = bullet.shadowBlur;
-        ctx.beginPath();
-        ctx.arc(bullet.x + bullet.width / 2, bullet.y + bullet.height / 2, bullet.width / 2, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.shadowBlur = 0;
-    }
-}
+function goToNextStage() { stage++; scoreThreshold += 100; enemySpeedMultiplier += 0.4; isBossActive = false; boss = null; }
+function isColliding(r1, r2) { return r1.x < r2.x + r2.width && r1.x + r1.width > r2.x && r1.y < r2.y + r2.height && r1.y + r1.height > r2.y; }
 
-function updateBullets() {
-    for (let i = bullets.length - 1; i >= 0; i--) {
-        const bullet = bullets[i];
-        if (!bullet) continue;
-        bullet.x += bulletSpeed;
-        if (isBossActive && boss && isColliding(bullet, boss)) {
-            boss.hp -= 10;
-            bullets.splice(i, 1);
-            if (boss.hp <= 0) goToNextStage();
-            continue;
-        }
-        for (let j = enemies.length - 1; j >= 0; j--) {
-            const enemy = enemies[j];
-            if (isColliding(bullet, enemy)) {
-                enemies.splice(j, 1);
-                bullets.splice(i, 1);
-                score += 10;
-                if (!isBossActive && score >= scoreThreshold) spawnBoss();
-                break;
-            }
-        }
-        if (bullet && bullet.x > canvas.width) bullets.splice(i, 1);
-    }
-}
+// --- Drawing ---
+function draw(obj) { ctx.fillStyle = obj.color; ctx.shadowColor = obj.shadowColor; ctx.shadowBlur = obj.shadowBlur; ctx.fillRect(obj.x, obj.y, obj.width, obj.height); ctx.shadowBlur = 0; }
+function drawBossBullets() { for (const b of bossBullets) { ctx.fillStyle = b.color; ctx.shadowColor = b.shadowColor; ctx.shadowBlur = b.shadowBlur; ctx.beginPath(); ctx.arc(b.x + b.width / 2, b.y + b.height / 2, b.width / 2, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0; } }
+function drawHUD() { ctx.fillStyle = '#fff'; ctx.font = "24px 'Courier New', Courier, monospace"; ctx.shadowColor = '#fff'; ctx.shadowBlur = 10; ctx.textAlign = 'left'; ctx.fillText(`SCORE: ${score}`, 20, 40); ctx.textAlign = 'right'; ctx.fillText(`STAGE: ${stage}`, canvas.width - 20, 40); ctx.shadowBlur = 0; ctx.textAlign = 'left'; if (isBossActive && boss) { const hpw = 300, hph = 20, hpx = (canvas.width - hpw) / 2, hpy = isVertical ? 70 : 10; ctx.fillStyle = '#555'; ctx.fillRect(hpx, hpy, hpw, hph); ctx.fillStyle = boss.color; ctx.fillRect(hpx, hpy, (boss.hp / boss.maxHp) * hpw, hph); ctx.strokeStyle = '#fff'; ctx.strokeRect(hpx, hpy, hpw, hph); } }
+function drawGameOver() { ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.fillStyle = '#f00'; ctx.font = "bold 60px 'Courier New', Courier, monospace"; ctx.textAlign = 'center'; ctx.shadowColor = '#f00'; ctx.shadowBlur = 20; ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2); ctx.shadowBlur = 0; ctx.fillStyle = '#fff'; ctx.font = "20px 'Courier New', Courier, monospace"; ctx.fillText('Press SPACE or FIRE to restart', canvas.width / 2, canvas.height / 2 + 50); }
 
-function spawnEnemy() {
-    if (gameOver || isBossActive) return;
-    const size = Math.random() * 40 + 20;
-    const y = Math.random() * (canvas.height - size);
-    const color = enemyColors[(stage - 1) % enemyColors.length];
-    enemies.push({ x: canvas.width, y: y, width: size, height: size, color: color, speed: (Math.random() * 3 + 1.5) * enemySpeedMultiplier, shadowColor: color, shadowBlur: 20 });
-}
-
+// --- Main Loop ---
 function gameLoop() {
-    if (gameOver) {
-        drawGameOver();
-        return;
-    }
+    if (gameOver) { drawGameOver(); return; }
+    if (keys.Space) fireBullet();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    updateStars();
-    drawStars();
-    drawPlayer();
-    updatePlayer();
-    if (isBossActive) {
-        drawBoss();
-        updateBoss();
-        drawBossBullets();
-        updateBossBullets();
-    } else {
-        drawEnemies();
-        updateEnemies();
-    }
-    drawBullets();
-    updateBullets();
+    stars.forEach(s => { s.x -= s.speed; if (s.x < 0) s.x = canvas.width; });
+    stars.forEach(s => { ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2); ctx.fill(); });
+    draw(player); updatePlayer();
+    if (isBossActive) { draw(boss); updateBoss(); drawBossBullets(); updateBossBullets(); } else { enemies.forEach(draw); updateEnemies(); }
+    bullets.forEach(draw); updateBullets();
     drawHUD();
     requestAnimationFrame(gameLoop);
 }
 
-// --- Simplified/Unchanged Functions ---
-function initStars(){for(let i=0;i<100;i++)stars.push({x:Math.random()*canvas.width,y:Math.random()*canvas.height,radius:Math.random()*2,speed:Math.random()*0.5+0.2})}function drawStars(){ctx.fillStyle='#fff';for(const t of stars){ctx.beginPath();ctx.arc(t.x,t.y,t.radius,0,Math.PI*2);ctx.fill()}}function updateStars(){for(const t of stars){t.x-=t.speed;if(t.x<0){t.x=canvas.width;t.y=Math.random()*canvas.height}}}function drawPlayer(){ctx.fillStyle=player.color;ctx.shadowColor=player.shadowColor;ctx.shadowBlur=player.shadowBlur;ctx.fillRect(player.x,player.y,player.width,player.height);ctx.shadowBlur=0}function updatePlayer(){if(keys.ArrowUp&&player.y>0)player.y-=player.speed;if(keys.ArrowDown&&player.y<canvas.height-player.height)player.y+=player.speed;if(keys.ArrowLeft&&player.x>0)player.x-=player.speed;if(keys.ArrowRight&&player.x<canvas.width-player.width)player.x+=player.speed}function drawBullets(){for(const t of bullets){ctx.fillStyle=t.color;ctx.shadowColor=t.shadowColor;ctx.shadowBlur=t.shadowBlur;ctx.fillRect(t.x,t.y,t.width,t.height);ctx.shadowBlur=0}}function drawEnemies(){for(const t of enemies){ctx.fillStyle=t.color;ctx.shadowColor=t.shadowColor;ctx.shadowBlur=t.shadowBlur;ctx.fillRect(t.x,t.y,t.width,t.height);ctx.shadowBlur=0}}function updateEnemies(){for(let i=enemies.length-1;i>=0;i--){const t=enemies[i];t.x-=t.speed;if(isColliding(player,t))gameOver=true;if(t.x+t.width<0)enemies.splice(i,1)}}function isColliding(t,o){return t.x<o.x+o.width&&t.x+t.width>o.x&&t.y<o.y+o.height&&t.y+t.height>o.y}function drawHUD(){ctx.fillStyle='#fff';ctx.font="24px 'Courier New', Courier, monospace";ctx.shadowColor='#fff';ctx.shadowBlur=10;ctx.textAlign='left';ctx.fillText(`SCORE: ${score}`,20,40);ctx.textAlign='right';ctx.fillText(`STAGE: ${stage}`,canvas.width-20,40);ctx.shadowBlur=0;ctx.textAlign='left'}function drawGameOver(){ctx.fillStyle='rgba(0,0,0,0.7)';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.fillStyle='#f00';ctx.font="bold 60px 'Courier New', Courier, monospace";ctx.textAlign='center';ctx.shadowColor='#f00';ctx.shadowBlur=20;ctx.fillText('GAME OVER',canvas.width/2,canvas.height/2);ctx.shadowBlur=0;ctx.fillStyle='#fff';ctx.font="20px 'Courier New', Courier, monospace";ctx.fillText('Press SPACE to restart',canvas.width/2,canvas.height/2+50)}
-
-// --- Initial calls ---
-initStars();
+// --- Init ---
+for (let i = 0; i < 100; i++) stars.push({ x: Math.random() * canvas.width, y: Math.random() * canvas.height, radius: Math.random() * 2, speed: Math.random() * 0.5 + 0.2 });
 setInterval(spawnEnemy, 1500);
+resetPlayerPosition();
 gameLoop();
