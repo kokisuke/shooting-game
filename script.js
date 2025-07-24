@@ -213,28 +213,59 @@ function drawHUD() {
     ctx.font = "24px 'Courier New', Courier, monospace";
     ctx.shadowColor = '#fff';
     ctx.shadowBlur = 10;
-    ctx.textAlign = 'left';
-    ctx.fillText(`SCORE: ${score}`, 20, 40);
-    ctx.textAlign = 'right';
-    ctx.fillText(`STAGE: ${stage}`, canvas.width - 20, 40);
-    
-    // Ammo Display
-    ctx.textAlign = 'center';
-    const ammoText = player.isReloading ? "RELOADING..." : `AMMO: ${player.ammo} / ${player.maxAmmo}`;
-    ctx.fillText(ammoText, canvas.width / 2, 40);
+
+    if (isVertical) {
+        // Vertical Layout
+        ctx.textAlign = 'left';
+        ctx.fillText(`SCORE: ${score}`, 20, 30);
+        ctx.textAlign = 'right';
+        ctx.fillText(`STAGE: ${stage}`, canvas.width - 20, 30);
+        
+        ctx.textAlign = 'center';
+        const ammoText = player.isReloading ? "RELOADING..." : `AMMO: ${player.ammo} / ${player.maxAmmo}`;
+        ctx.fillText(ammoText, canvas.width / 2, 60);
+
+        if (isBossActive && boss) {
+            const hpw = canvas.width * 0.9;
+            const hph = 20;
+            const hpx = (canvas.width - hpw) / 2;
+            const hpy = 90;
+            
+            ctx.fillStyle = '#555';
+            ctx.fillRect(hpx, hpy, hpw, hph);
+            ctx.fillStyle = boss.color;
+            ctx.fillRect(hpx, hpy, (boss.hp / boss.maxHp) * hpw, hph);
+            ctx.strokeStyle = '#fff';
+            ctx.strokeRect(hpx, hpy, hpw, hph);
+        }
+    } else {
+        // Horizontal Layout
+        ctx.textAlign = 'left';
+        ctx.fillText(`SCORE: ${score}`, 20, 40);
+        ctx.textAlign = 'right';
+        ctx.fillText(`STAGE: ${stage}`, canvas.width - 20, 40);
+        
+        ctx.textAlign = 'center';
+        const ammoText = player.isReloading ? "RELOADING..." : `AMMO: ${player.ammo} / ${player.maxAmmo}`;
+        ctx.fillText(ammoText, canvas.width / 2, 40);
+
+        if (isBossActive && boss) {
+            const hpw = 300;
+            const hph = 20;
+            const hpx = (canvas.width - hpw) / 2;
+            const hpy = 10;
+            
+            ctx.fillStyle = '#555';
+            ctx.fillRect(hpx, hpy, hpw, hph);
+            ctx.fillStyle = boss.color;
+            ctx.fillRect(hpx, hpy, (boss.hp / boss.maxHp) * hpw, hph);
+            ctx.strokeStyle = '#fff';
+            ctx.strokeRect(hpx, hpy, hpw, hph);
+        }
+    }
 
     ctx.shadowBlur = 0;
-    ctx.textAlign = 'left';
-
-    if (isBossActive && boss) {
-        const hpw = 300, hph = 20, hpx = (canvas.width - hpw) / 2, hpy = isVertical ? 70 : 10;
-        ctx.fillStyle = '#555';
-        ctx.fillRect(hpx, hpy, hpw, hph);
-        ctx.fillStyle = boss.color;
-        ctx.fillRect(hpx, hpy, (boss.hp / boss.maxHp) * hpw, hph);
-        ctx.strokeStyle = '#fff';
-        ctx.strokeRect(hpx, hpy, hpw, hph);
-    }
+    ctx.textAlign = 'left'; // Reset alignment
 }
 function drawGameOver() { ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.fillStyle = '#f00'; ctx.font = "bold 60px 'Courier New', Courier, monospace"; ctx.textAlign = 'center'; ctx.shadowColor = '#f00'; ctx.shadowBlur = 20; ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2); ctx.shadowBlur = 0; ctx.fillStyle = '#fff'; ctx.font = "20px 'Courier New', Courier, monospace"; ctx.fillText('Press SPACE or FIRE to restart', canvas.width / 2, canvas.height / 2 + 50); }
 
